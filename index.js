@@ -34,7 +34,8 @@ var getopt = stdio.getopt({
 	method: {
 		key: 'm',
 		args: 1,
-		description: 'method'
+		description: 'method' +
+		'-m sms'
 	}
 });
 
