@@ -1,15 +1,15 @@
 {
-  "name": "modem-manager",
+  "name": "MF823D-modem-manager",
   "version": "0.1.0",
   "description": "Modem MF823D-1.0.0 manager",
   "main": "index.js",
-  "scripts": {
-    "test": "test"
-  },
+  "scripts": {},
   "author": "",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^5.0.1",
+    "moment": "^2.22.1",
+    "pm2": "^2.10.3",
     "request": "^2.85.0",
     "request-promise": "^4.2.2",
     "stdio": "^0.2.7",

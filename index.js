@@ -5,6 +5,8 @@
  
 require('dotenv').config();
 
+const moment = require('moment');
+
 var stdio = require('stdio');
 var requestp = require('request-promise');
 var teleBotInstance = require('telebot');
@@ -15,19 +17,17 @@ var telebotOptions = {
 	token: process.env.MY_TOKEN,
 	usePlugins: [],
 	polling: {
-		interval: 1000,
+		interval: ((60*60)*1000),
 		timeout: 0,
 		limit: 100,
 		retryTimeout: 5000
 	}
-
 };
 
 if (process.env.PROXY_ADDR)
 	telebotOptions.polling.proxy = process.env.PROXY_ADDR;
 
 var telebot = new teleBotInstance(telebotOptions);
-
 
 // cli params
 var getopt = stdio.getopt({
@@ -99,7 +99,11 @@ var paramRequests = {
 		'Отправитель: *' + o.sms.subject + '*' + "\n" +
 		'Сообщение:' + "\n" +
 		'```' + o.sms.text + '```';;
-	}
+	},
+	printHelp: "\n" +
+		'/mf823 version' + "\n" +
+		'/mf823 status' + "\n" +
+		'/mf823 help' + "\n"
 }
 
 function smsModemController(ctn) {
@@ -110,7 +114,7 @@ function smsModemController(ctn) {
 
 		ctn.modem.hardware = modem.hardware_version;
 		ctn.modem.phone = modem.msisdn;
-	
+
 		return modemController(paramRequests.getSMSList, function(sms) {
 			if (sms.messages.length > 0) {
 				for (var i = 0; i < sms.messages.length; i++) {
@@ -120,16 +124,13 @@ function smsModemController(ctn) {
 						ctn.sms.text = decodeMessage(sms.messages[i].content);
 						ctn.sms.date = transTime(sms.messages[i].date);
 						ctn.sms.subject = sms.messages[i].number;
-
 						var constructTelegramNotice = paramRequests.setTelegramNotice(ctn);
-
 						paramRequests.setReadSMSMessage.form.msg_id = sms.messages[i].id + ';';
-
 						modemController(paramRequests.setReadSMSMessage, function(res) {
 							console.log(res);
 						});
 
-						console.log(constructTelegramNotice);
+						console.log('New message sent');
 
 						telebot.sendMessage(process.env.CHAT_ID, constructTelegramNotice, {
 							parseMode: 'Markdown'
@@ -141,7 +142,87 @@ function smsModemController(ctn) {
 	});
 }
 
+sendTelegramMessage = function(param) {
+
+	var momentjs = moment();
+	var timestamp = momentjs.format('YYYY-MM-DD HH:mm:ss');
+
+	var sentParam = {
+		parseMode: 'Markdown'
+	};
+
+	if (param.replyToMessage) {
+		sentParam.replyToMessage = param.replyToMessage;
+	}
+
+	param.message = '`[' + timestamp + ']` ' + "\n" + param.message;
+
+	// console.log(message);
+	return telebot.sendMessage(param.chatID, param.message, sentParam);
+
+};
+
+function printTelebotHelp(msg) {
+	return sendTelegramMessage({
+		message: "\n" +
+		'/mf823 version' + "\n" +
+		'/mf823 status' + "\n" +
+		'/mf823 help' + "\n",
+		chatID: msg.chat.id,
+		replyToMessage: msg.message_id
+	});
+}
+
+telebot.on(['/mf823'], function(msg) {
+	
+	let metsplit = msg.text.split(' ');
+	let method = (typeof metsplit[1] !== 'undefined') ? metsplit[1] : '';
+
+	switch(method) {
+		case 'status': modemController(paramRequests.getModemInfo, function(modem) {
+			return sendTelegramMessage({
+				message: '``` ' +
+					'imei: ' + modem.imei + "\n" +
+					'web_version: ' + modem.web_version + "\n" +
+					'wa_inner_version: ' + modem.wa_inner_version + "\n" +
+					'hardware_version: ' + modem.hardware_version + "\n" +
+					'lan_ipaddr: ' + modem.lan_ipaddr + "\n" +
+					'msisdn: ' + modem.msisdn + "\n" +
+					'LocalDomain: ' + modem.LocalDomain + "\n" +
+					'wan_ipaddr: ' + modem.wan_ipaddr + "\n" +
+					'ipv6_wan_ipaddr: ' + modem.ipv6_wan_ipaddr + "\n" +
+					'ppp_status: ' + modem.ppp_status + "\n" +
+					'sim_imsi: ' + modem.sim_imsi + "\n" +
+					'lte_rsrp: ' + modem.lte_rsrp + "\n" +
+					'network_type: ' + modem.network_type + "\n" +
+					'```',
+				chatID: msg.chat.id,
+				replyToMessage: msg.message_id
+			});
+			//console.log(modem);
+		});
+		break;
+		default: sendTelegramMessage({
+				message: paramRequests.printHelp,
+				chatID: msg.chat.id,
+				replyToMessage: msg.message_id
+			});
+		break;
+	}
+});
+
+
+function smsModemControllerServer() {
+	var interval = 60000;
+	// loop tick infinite
+	telebot.start();
+	setInterval(function() {
+		smsModemController();
+	}, interval);
+}
+
 switch(getopt.method) {
+	case 'server':		smsModemControllerServer();break;
 	case 'sms':		smsModemController();break;
 	default:		getopt.printHelp();
 }
